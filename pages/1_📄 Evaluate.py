@@ -30,19 +30,20 @@ def save_case_cache(case_name, score, table_html):
 st.set_page_config(page_title="Case Evaluation", layout="wide")
 st.title("Case Evaluation")
 
-# Initialize session state variables
-if 'initialized' not in st.session_state:
-    try:
-        from doc_assistant.document_processor import DocumentProcessor
-        from doc_assistant.llm_service import LLMService, EvaluationVisualizer
-        
+# Initialize services only when needed
+try:
+    from doc_assistant.document_processor import DocumentProcessor
+    from doc_assistant.llm_service import LLMService, EvaluationVisualizer
+    
+    if 'document_processor' not in st.session_state:
         st.session_state.document_processor = DocumentProcessor()
+    if 'llm_service' not in st.session_state:
         st.session_state.llm_service = LLMService()
+    if 'visualizer' not in st.session_state:
         st.session_state.visualizer = EvaluationVisualizer()
-        st.session_state.initialized = True
-    except Exception as e:
-        st.error(f"初始化服务时出错: {str(e)}")
-        st.stop()
+except Exception as e:
+    st.error(f"初始化服务时出错: {str(e)}")
+    st.stop()
 
 st.header("File Upload")
 uploaded_files = st.file_uploader("Upload Case Documents", type=['txt', 'docx', 'pdf'], accept_multiple_files=True)

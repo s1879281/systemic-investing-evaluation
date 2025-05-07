@@ -8,20 +8,6 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Score Comparison", layout="wide")
 st.title("Compare Cases")
 
-# Initialize session state variables
-if 'initialized' not in st.session_state:
-    try:
-        from doc_assistant.document_processor import DocumentProcessor
-        from doc_assistant.llm_service import LLMService, EvaluationVisualizer
-        
-        st.session_state.document_processor = DocumentProcessor()
-        st.session_state.llm_service = LLMService()
-        st.session_state.visualizer = EvaluationVisualizer()
-        st.session_state.initialized = True
-    except Exception as e:
-        st.error(f"初始化服务时出错: {str(e)}")
-        st.stop()
-
 # 强制所有内容左对齐
 st.markdown('''
     <style>

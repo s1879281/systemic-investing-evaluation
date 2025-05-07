@@ -5,6 +5,7 @@ import json
 import re
 import csv
 import io
+import os
 
 class LLMService:
     def __init__(self):
