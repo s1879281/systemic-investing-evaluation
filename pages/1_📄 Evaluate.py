@@ -4,6 +4,7 @@ import tiktoken
 import os
 import pickle
 from datetime import datetime
+import traceback
 
 def render_dataframe(df):
     st.markdown(
@@ -43,6 +44,7 @@ try:
         st.session_state.visualizer = EvaluationVisualizer()
 except Exception as e:
     st.error(f"初始化服务时出错: {str(e)}")
+    st.text(traceback.format_exc())
     st.stop()
 
 st.header("File Upload")
