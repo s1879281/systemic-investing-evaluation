@@ -4,7 +4,6 @@ import pickle
 import pandas as pd
 
 st.set_page_config(page_title="Manage Cases", layout="wide")
-st.title("Manage Cases")
 
 # 全局左对齐样式
 st.markdown('''

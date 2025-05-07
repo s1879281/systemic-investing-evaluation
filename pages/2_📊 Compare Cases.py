@@ -6,7 +6,6 @@ import json
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Score Comparison", layout="wide")
-st.title("Compare Cases")
 
 # 强制所有内容左对齐
 st.markdown('''
