@@ -43,7 +43,7 @@ try:
     if 'visualizer' not in st.session_state:
         st.session_state.visualizer = EvaluationVisualizer()
 except Exception as e:
-    st.error(f"初始化服务时出错: {str(e)}")
+    st.error(f"Error initializing services: {str(e)}")
     st.text(traceback.format_exc())
     st.stop()
 
@@ -53,7 +53,7 @@ case_name = st.text_input("Enter a unique case name (used as identifier)")
 evaluate_clicked = st.button("Evaluate")
 if uploaded_files and case_name and evaluate_clicked:
     try:
-        # 检查case名唯一性
+        # Check case name uniqueness
         cache_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cache', 'case_cache.pkl')
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as f:
@@ -63,14 +63,14 @@ if uploaded_files and case_name and evaluate_clicked:
         if case_name in cache:
             st.error("Case name already exists. Please enter a unique name.")
             st.stop()
-        # 拼接所有文件内容
+        # Concatenate all file contents
         processed_text = ""
         for uploaded_file in uploaded_files:
             file_type = uploaded_file.name.split('.')[-1].lower()
             file_content = uploaded_file.read()
             processed_text += st.session_state.document_processor.process_user_document(file_content, file_type) + "\n\n"
         st.session_state.current_doc = processed_text
-        # 检查token数量
+        # Check token count
         enc = tiktoken.encoding_for_model('gpt-4o-mini')
         total_tokens = len(enc.encode(processed_text))
         max_tokens = 100_000
@@ -84,7 +84,7 @@ st.header("Evaluation Results")
 if uploaded_files and case_name and evaluate_clicked and 'current_doc' in st.session_state:
     with st.spinner("Evaluating..."):
         try:
-            # 短文档，单块评估
+            # Short document, single chunk evaluation
             prompt = st.session_state.document_processor.prepare_prompt(
                 st.session_state.current_doc
             )
@@ -146,7 +146,7 @@ if uploaded_files and case_name and evaluate_clicked and 'current_doc' in st.ses
                         st.plotly_chart(fig2)
                 else:
                     st.error("LLM returned scores in incorrect format. Please check LLM output format.")
-                # 缓存case名、score和table_html
+                # Cache case name, score, and table_html
                 save_case_cache(case_name, result['scores'], table_html)
             else:
                 st.error("Unable to get evaluation results. Please try again.")

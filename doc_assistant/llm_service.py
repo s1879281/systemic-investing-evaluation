@@ -1,4 +1,4 @@
-from openai import OpenAI
+﻿from openai import OpenAI, AzureOpenAI
 import streamlit as st
 import plotly.graph_objects as go
 import json
@@ -6,96 +6,147 @@ import re
 import csv
 import io
 import os
+from dotenv import load_dotenv
 
 class LLMService:
     def __init__(self):
-        # Use Streamlit secrets instead of .env
-        if 'OPENAI_API_KEY' not in st.secrets:
-            raise ValueError("OpenAI API key not found in Streamlit secrets. Please add it to your secrets.toml file.")
-        self.client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+        # Load environment variables from .env file
+        load_dotenv()
         
-    def get_evaluation(_self, prompt):
-        """获取评估结果，返回原始JSON数据"""
+        # Try to get OpenAI API key from st.secrets first, then fallback to .env
+        api_key = None
+        
+        # First try st.secrets (for Streamlit Cloud deployment)
         try:
-            response = _self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": '''You are a professional systemic investing evaluation expert. Your task is to assess investment cases based on the 13 hallmarks framework.
+            if 'AZURE_OPENAI_API_KEY' in st.secrets:
+                api_key = st.secrets['AZURE_OPENAI_API_KEY']
+            if 'ENDPOINT_URL' in st.secrets:
+                endpoint = st.secrets['ENDPOINT_URL']
+        except Exception:
+            # st.secrets might not be available in all contexts
+            pass
+        
+        # If not found in st.secrets, try .env file
+        if not api_key or not endpoint:
+            endpoint = os.getenv("ENDPOINT_URL")
+            api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        
+        # If still not found, raise an error
+        if not api_key or not endpoint:
+            raise ValueError(
+                'Azure OpenAI API or Endpoint URL not found. Please add it to either:' + chr(10) +
+                '1. Streamlit secrets (for deployment): Add to your secrets.toml file' + chr(10) +
+                '2. Environment file: Add AZURE_OPENAI_API_KEY and ENDPOINT_URL to your .env file'
+            )
 
-IMPORTANT: You MUST return your response in the following JSON format:
-{
-    "table": "A markdown formatted table with columns: Hallmark, Score (0-10), Justification, Suggested Indicators",
-    "overall_score": "The average score as a number with one decimal point",
-    "scores": {
-        "Systems Thinking and Complexity Science": score1,
-        "Paradigm Evolution": score2,
-        ...
+        # Initialize Azure OpenAI client with key-based authentication
+        self.client = AzureOpenAI(
+            azure_endpoint=endpoint,
+            api_key=api_key,
+            api_version="2025-01-01-preview",
+        )
+
+        
+    def get_evaluation(self, prompt):
+        """Get evaluation results, return raw JSON data"""
+        try:
+            chat_prompt = [
+                {
+                    "role": "system", "content": [
+                        {
+                            "type": "text",
+                            "text": '''You are a professional systemic investing evaluation expert. Your task is to assess investment cases based on the 13 hallmarks framework.
+
+    IMPORTANT: You MUST return your response in the following JSON format:
+    {
+        "table": "A markdown formatted table with columns: Hallmark, Score (0-10), Justification, Suggested Indicators",
+        "overall_score": "The average score as a number with one decimal point",
+        "scores": {
+            "Systems Thinking and Complexity Science": score1,
+            "Paradigm Evolution": score2,
+            ...
+        }
     }
-}
 
-For each hallmark, you should:
-1. Provide a score from 0 to 10 (with one decimal point)
-2. Give a brief justification for the rating
-3. Suggest relevant indicators from the provided indicator set
+    For each hallmark, you should:
+    1. Provide a score from 0 to 10 (with one decimal point)
+    2. Give a brief justification for the rating
+    3. Suggest relevant indicators from the provided indicator set
 
-The table should be formatted in markdown with clear column headers.
-The overall_score should be a number with one decimal point.
-The scores object should use the full Hallmark title as the key, matching the Hallmark column in the table, and contain all 13 hallmark scores as numbers.
+    The table should be formatted in markdown with clear column headers.
+    The overall_score should be a number with one decimal point.
+    The scores object should use the full Hallmark title as the key, matching the Hallmark column in the table, and contain all 13 hallmark scores as numbers.
 
-Ensure your evaluation is thorough, objective, and well-justified.'''} ,
-                    {"role": "user", "content": prompt}
-                ],
+    Ensure your evaluation is thorough, objective, and well-justified.'''}
+                    ]
+                },
+                {
+                    "role": "user", "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        }
+                    ]
+                }
+            ]
+
+            # Include speech result if speech is enabled
+            messages = chat_prompt
+
+            # Generate the completion
+            completion = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                stop=None,
+                stream=False,
                 temperature=0,
-                top_p=1,
-                frequency_penalty=0,
-                presence_penalty=0,
                 seed=42
             )
-            
-            # 解析JSON响应
-            response_text = response.choices[0].message.content
+
+            # Parse JSON response
+            response_text = completion.choices[0].message.content
             try:
-                # 尝试直接解析JSON
+                # Try to parse JSON directly
                 result = json.loads(response_text)
             except json.JSONDecodeError:
-                # 如果直接解析失败，尝试提取和清理JSON部分
+                # If direct parsing fails, try to extract and clean JSON part
                 try:
-                    # 查找JSON开始和结束的位置
+                    # Find JSON start and end positions
                     start = response_text.find('{')
                     end = response_text.rfind('}') + 1
                     if start != -1 and end != -1:
                         json_str = response_text[start:end]
-                        # 清理JSON字符串
-                        cleaned_json = _self.clean_json_string(json_str)
+                        # Clean JSON string
+                        cleaned_json = self.clean_json_string(json_str)
                         result = json.loads(cleaned_json)
                     else:
                         raise json.JSONDecodeError("No JSON object found", response_text, 0)
                 except Exception as e:
                     raise ValueError(f"Failed to parse the response as JSON: {str(e)}")
-            # 确保scores为dict类型
+            # Ensure scores is dict type
             if 'scores' in result and isinstance(result['scores'], str):
                 try:
                     result['scores'] = json.loads(result['scores'])
                 except Exception:
-                    raise ValueError("LLM返回的scores字段是字符串且无法解析为字典。")
+                    raise ValueError("The scores field returned by LLM is a string and cannot be parsed as a dictionary.")
             if 'scores' in result and not isinstance(result['scores'], dict):
-                raise ValueError("LLM返回的scores字段不是字典。")
+                raise ValueError("The scores field returned by LLM is not a dictionary.")
             return result
                 
         except Exception as e:
             raise Exception(f"Error getting LLM response: {str(e)}")
 
     def clean_json_string(self, json_str):
-        """清理JSON字符串"""
-        # 移除控制字符
+        """Clean JSON string"""
+        # Remove control characters
         json_str = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', json_str)
-        # 处理换行符
+        # Handle line breaks
         json_str = json_str.replace('\n', '\\n')
         return json_str
 
 class EvaluationVisualizer:
     def __init__(self):
-        # 加载映射文件
+        # Load mapping files
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         level_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'input_files', 'system_change_level_to_hallmarks.json')
         condition_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'input_files', 'system_change_condition_to_hallmarks.json')
@@ -105,7 +156,7 @@ class EvaluationVisualizer:
             self.condition_map = json.load(f)
 
     def create_radar_chart(self, scores: dict, height=1000, width=1000) -> go.Figure:
-        # 直接用scores字典生成雷达图
+        # Create radar chart directly using scores dictionary
         categories = list(scores.keys())
         values = list(scores.values())
         fig = go.Figure()
@@ -187,7 +238,7 @@ class EvaluationVisualizer:
         return fig
 
     def create_merged_level_condition_radar(self, scores: dict) -> go.Figure:
-        # 计算level和condition的平均分
+        # Calculate average score for level and condition
         level_categories = list(self.level_map.keys())
         level_values = []
         for level, hallmarks in self.level_map.items():
@@ -202,7 +253,7 @@ class EvaluationVisualizer:
             hallmark_scores = [s for s in hallmark_scores if s is not None]
             avg = round(sum(hallmark_scores)/len(hallmark_scores), 2) if hallmark_scores else 0
             condition_values.append(avg)
-        # 合并所有维度
+        # Merge all dimensions
         all_categories = level_categories + condition_categories
         level_plot = level_values + [None]*len(condition_categories)
         condition_plot = [None]*len(level_categories) + condition_values
@@ -235,15 +286,15 @@ class EvaluationVisualizer:
         return fig
 
     def display_evaluation(self, result):
-        """显示评估结果"""
-        # 显示表格
+        """Display evaluation results"""
+        # Display table
         st.markdown(result['table'])
         
-        # 显示总体分数
+        # Display overall score
         st.subheader("Overall Score")
         st.write(f"Average Score: {result['overall_score']}")
         
-        # 创建并显示雷达图
+        # Create and display radar chart
         st.subheader("Score Distribution")
         try:
             fig = self.create_radar_chart(result['scores'])

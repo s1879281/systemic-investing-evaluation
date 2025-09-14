@@ -5,7 +5,7 @@ import pandas as pd
 
 st.set_page_config(page_title="Manage Cases", layout="wide")
 
-# 全局左对齐样式
+# Global left-aligned style
 st.markdown('''
     <style>
     .block-container {margin-left: 0 !important; padding-left: 1.5rem !important;}
@@ -21,7 +21,7 @@ if os.path.exists(cache_file):
 else:
     cache = {}
 
-# 记录上一次选择的case，切换时重置所有delete_mode
+# Record the last selected case, reset all delete_mode when switching
 if 'last_selected_case' not in st.session_state:
     st.session_state['last_selected_case'] = None
 if 'delete_success' not in st.session_state:
@@ -34,13 +34,13 @@ if not cache:
 else:
     case_names = list(cache.keys())
     selected_case = st.selectbox("Select a case to manage", case_names)
-    # 切换case时重置所有delete_mode
+    # Reset all delete_mode when switching case
     if st.session_state['last_selected_case'] != selected_case:
         for k in list(st.session_state.keys()):
             if k.startswith('delete_mode_'):
                 st.session_state[k] = False
         st.session_state['last_selected_case'] = selected_case
-    # 删除成功提示
+    # Delete success prompt
     if st.session_state['delete_success']:
         st.success(st.session_state['delete_success'])
         st.session_state['delete_success'] = ""
